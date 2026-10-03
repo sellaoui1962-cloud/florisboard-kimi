@@ -1,0 +1,47 @@
+name: Build APK from ZIP
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          ZIP=$(ls *.zip | head -n 1)
+          echo "Unzipping $ZIP"
+          mkdir -p src
+          unzip -q "$ZIP" -d src
+          GRADLEW=$(find src -name gradlew -not -path "*/node_modules/*" | head -n 1)
+          echo "PROJECT_DIR=$(dirname "$GRADLEW")" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          find "$PROJECT_DIR" -path "*/build/outputs/apk/debug/*.apk" -exec cp {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlorisKimi-apk
+          path: out/*.apk
